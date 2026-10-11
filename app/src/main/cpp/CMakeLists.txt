@@ -17,6 +17,13 @@ add_library(
     modules/opengl_test_harness.cpp
 )
 
+target_compile_options(
+    nebulaclient
+    PRIVATE
+    -Wall -Wextra -Wpedantic -Wshadow -Wformat=2
+    -fvisibility=hidden -fvisibility-inlines-hidden
+)
+
 find_library(log-lib log)
 find_library(gles-lib GLESv2)
 find_library(EGL-lib EGL)

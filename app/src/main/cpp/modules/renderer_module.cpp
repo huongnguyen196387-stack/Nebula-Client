@@ -7,6 +7,6 @@ namespace Nebula {
     }
 
     void RendererModule::ShutdownRenderer() {
-        LOGI("RendererModule: Đã dọn dẹp tài nguyên renderer.");
+        LOGI("RendererModule: chưa có tài nguyên renderer nào được tạo, không cần dọn dẹp.");
     }
 }

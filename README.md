@@ -15,9 +15,10 @@
 - JNI library load and status display: present in source.
 - UI Choreographer callback-rate display: present; this is **not Minecraft FPS**.
 - Standalone EGL pbuffer / GLES pixel smoke test: implemented in source, but not verified on a real device in this package-generation step.
-- Minecraft Bedrock 1.26.50 ARM64 native hooks: **NOT IMPLEMENTED**.
+- Hook state tracking (`HookState`, installed-hook counter): present. `Active` is only reported when at least one hook is really installed; no install code exists yet.
+- Minecraft Bedrock 1.26.50 ARM64 native hooks: **NOT IMPLEMENTED**. Missing: `libminecraftpe.so` for 1.26.50 and a verified way to load code into the game process (this app runs in its own process).
 - In-game renderer/menu: **NOT IMPLEMENTED**.
 - Fullbright affecting the game: **NOT IMPLEMENTED**; current code stores only a boolean state.
 
 ## Build
-Push this project to GitHub. The workflow at `.github/workflows/build.yml` attempts to build a debug APK and upload it as an Actions artifact. No successful build is claimed until the workflow completes successfully.
+Push this project to GitHub. The workflow at `.github/workflows/build.yml` attempts to build a debug APK and upload it as an Actions artifact. After the build, `scripts/verify_native.sh` checks the APK contains only `lib/arm64-v8a/libnebulaclient.so`, that it is ELF64 AArch64, and that the JNI symbols are exported. Build logs are uploaded as the `nebulaclient-build-logs` artifact. No successful build is claimed until the workflow completes successfully.

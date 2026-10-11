@@ -11,6 +11,7 @@
 
 namespace Nebula {
     bool InitModules();
+    void ShutdownModules();
 }
 
 #endif

@@ -2,9 +2,12 @@ name: Build Nebula Client Native APK
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: ["main", "master"]
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -17,62 +20,82 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Setup Gradle 8.2
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.2"
+          gradle-version: '8.2'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+        uses: android-actions/setup-android@v3
 
       - name: Install SDK components, NDK, and CMake
-        shell: bash
         run: |
-          set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
+          yes | sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             "ndk;25.2.9519653" \
             "cmake;3.22.1"
 
       - name: Generate Gradle Wrapper (8.2)
-        shell: bash
         run: |
-          set -euo pipefail
           gradle --version
           gradle wrapper --gradle-version 8.2 --distribution-type bin
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Clean and Build Debug APK
-        run: ./gradlew clean assembleDebug
+      - name: Prepare log directory
+        run: mkdir -p logs
+
+      - name: Clean and Build Debug APK & arm64-v8a Library
+        shell: bash
+        run: ./gradlew clean assembleDebug --console=plain --warning-mode all 2>&1 | tee logs/gradle-build.log
 
       - name: Verify APK Output Existence
-        shell: bash
         run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          if [ ! -f "$APK" ]; then
-            echo "Error: APK output not found!"
+          if [ ! -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            echo "Lỗi: Không tìm thấy tệp APK đầu ra!"
             exit 1
           fi
-          echo "APK output exists."
+          echo "Tệp APK đã tồn tại chính xác."
 
-      - name: Verify ARM64 native library in APK
+      - name: Verify native library (ABI + JNI exports)
         shell: bash
         run: |
-          set -euo pipefail
-          APK="app/build/outputs/apk/debug/app-debug.apk"
-          ENTRY="lib/arm64-v8a/libnebulaclient.so"
-          unzip -Z1 "$APK" | grep -Fx "$ENTRY"
-          unzip -p "$APK" "$ENTRY" > /tmp/libnebulaclient.so
-          readelf -h /tmp/libnebulaclient.so | grep "Machine:" | grep -q "AArch64"
-          echo "Verified: native library is AArch64 and packaged."
+          NDK_BIN="${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          if [ -x "$NDK_BIN/llvm-readelf" ] && [ -x "$NDK_BIN/llvm-nm" ]; then
+            export READELF="$NDK_BIN/llvm-readelf" NM="$NDK_BIN/llvm-nm"
+          else
+            echo "Không thấy llvm-readelf/llvm-nm của NDK, dùng readelf/nm hệ thống."
+          fi
+          chmod +x scripts/verify_native.sh
+          scripts/verify_native.sh app/build/outputs/apk/debug/app-debug.apk | tee logs/verify_native.log
+
+      - name: Summarize compiler warnings
+        if: always()
+        shell: bash
+        run: |
+          if [ -f logs/gradle-build.log ]; then
+            count=$(grep -c 'warning:' logs/gradle-build.log || true)
+            echo "Số dòng 'warning:' trong logs/gradle-build.log: ${count:-0}" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "(Nếu AGP không in output của trình biên dịch native vào log này thì con số 0 không chứng minh không có cảnh báo.)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Không có logs/gradle-build.log" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nebulaclient-build-logs
+          path: |
+            logs/
+            app/.cxx/**/*.txt
+            app/.cxx/**/.ninja_log
+          if-no-files-found: warn
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
