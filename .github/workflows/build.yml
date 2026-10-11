@@ -2,9 +2,9 @@ name: Build Nebula Client Native APK
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: ["main", "master"]
 
 jobs:
   build:
@@ -17,43 +17,62 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
       - name: Setup Gradle 8.2
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.2'
+          gradle-version: "8.2"
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
 
       - name: Install SDK components, NDK, and CMake
+        shell: bash
         run: |
-          yes | sdkmanager \
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
             "platforms;android-34" \
             "build-tools;34.0.0" \
             "ndk;25.2.9519653" \
             "cmake;3.22.1"
 
       - name: Generate Gradle Wrapper (8.2)
+        shell: bash
         run: |
+          set -euo pipefail
           gradle --version
           gradle wrapper --gradle-version 8.2 --distribution-type bin
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Clean and Build Debug APK & arm64-v8a Library
+      - name: Clean and Build Debug APK
         run: ./gradlew clean assembleDebug
 
       - name: Verify APK Output Existence
+        shell: bash
         run: |
-          if [ ! -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-            echo "Lỗi: Không tìm thấy tệp APK đầu ra!"
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -f "$APK" ]; then
+            echo "Error: APK output not found!"
             exit 1
           fi
-          echo "Tệp APK đã tồn tại chính xác."
+          echo "APK output exists."
+
+      - name: Verify ARM64 native library in APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          ENTRY="lib/arm64-v8a/libnebulaclient.so"
+          unzip -Z1 "$APK" | grep -Fx "$ENTRY"
+          unzip -p "$APK" "$ENTRY" > /tmp/libnebulaclient.so
+          readelf -h /tmp/libnebulaclient.so | grep "Machine:" | grep -q "AArch64"
+          echo "Verified: native library is AArch64 and packaged."
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
