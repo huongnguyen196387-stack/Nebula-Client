@@ -29,7 +29,7 @@ jobs:
           gradle-version: '8.2'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install SDK components, NDK, and CMake
         run: |
